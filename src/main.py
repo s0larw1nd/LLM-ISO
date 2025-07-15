@@ -10,35 +10,60 @@ def answer_query(query,
                  model_name="./models/Qwen2.5-7B-Instruct-merged",
                  embeddings_name="./models/FRIDA",
                  persistent_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "chroma_db"),
-                 file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents", "doc.docx"),
+                 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents", "doc.docx"),
                  model = None,
-                 tokenizer = None):
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_name)
+                 tokenizer = None,
+                 embeddings = None,
+                 retriever = None,
+                 text_splitter = None,
+                 context_docs = [],
+                 new_db = False):
+    
+    if context_docs == []:
+        if embeddings is None:
+            embeddings = HuggingFaceEmbeddings(model_name=embeddings_name)
 
-    if not os.path.exists(persistent_directory):
-        loader = Docx2txtLoader(file_path)
-        documents = loader.load()
+        if not os.path.exists(persistent_directory) or new_db:
+            print("Создание БД")
 
-        #text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        #text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
-        text_splitter = CustomTextSplitter(chunk_size=300)
-        docs = text_splitter.split_documents(documents)
+            if text_splitter is None:
+                #text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=150)
+                #text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
+                text_splitter = CustomTextSplitter(chunk_size=300)
+            
+            if os.path.isfile(path):
+                loader = Docx2txtLoader(path)
+                documents = loader.load()
+                docs = text_splitter.split_documents(documents)
+            elif os.path.isdir(path):
+                docx_files = [f for f in os.listdir(path) if f.endswith('.docx')]
+                docs = []
+                for file_name in docx_files:
+                    file_path = os.path.join(path, file_name)
+                    loader = Docx2txtLoader(file_path)
+                    documents = loader.load()
+                    split_docs = text_splitter.split_documents(documents)
+                    docs.extend(split_docs)
+            else:
+                raise ValueError("Некорректный путь")
 
-        db = Chroma.from_documents(docs, embeddings, persist_directory=persistent_directory)
-    else:
-        print("БД уже существует")
+            db = Chroma.from_documents(docs, embeddings, persist_directory=persistent_directory)
+        else:
+            print("БД уже существует")
 
-    db = Chroma(persist_directory=persistent_directory, embedding_function=embeddings)
+        if retriever is None:
+            db = Chroma(persist_directory=persistent_directory, embedding_function=embeddings)
 
-    retriever = db.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 15},
-    )
-    relevant_docs = retriever.invoke(query)
+            retriever = db.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 15},
+            )
 
-    #for i, doc in enumerate(relevant_docs, 1):
-        #print(f"Документ {i}:\n{doc.page_content}\n")
-    context_docs = "\n\n".join([doc.page_content for doc in relevant_docs])
+        relevant_docs = retriever.invoke(query)
+
+        #for i, doc in enumerate(relevant_docs, 1):
+            #print(f"Документ {i}:\n{doc.page_content}\n")
+        context_docs = "\n\n".join([doc.page_content for doc in relevant_docs])
 
     if model is None: model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto", local_files_only=True, load_in_4bit=True)
     if tokenizer is None: tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -61,7 +86,7 @@ def answer_query(query,
         tokenize=False,
         add_generation_prompt=True
     )
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    model_inputs = tokenizer([text], return_tensors="pt",truncation=True,max_length=32768).to(model.device)
 
     generated_ids = model.generate(
         **model_inputs,

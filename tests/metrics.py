@@ -1,10 +1,25 @@
 import math
+import torch
+import numpy as np
 
 def make_ngram(sentence,n=1):
     res = []
     for i in range(len(sentence)-(n-1)):
         res += [" ".join(sentence[i:i+n])]
     return res
+
+def cosine(reference, candidate, embeddings, text_splitter):
+    cosi = torch.nn.CosineSimilarity(dim=0)
+    
+    res_splitted = text_splitter.split_text(candidate)
+    embedding_res = embeddings.embed_documents(res_splitted)
+    mean_res = torch.tensor(np.mean(np.array(embedding_res), axis=0))
+
+    answ_splitted = text_splitter.split_text(reference)
+    embedding_answ = embeddings.embed_documents(answ_splitted)
+    mean_answ = torch.tensor(np.mean(np.array(embedding_answ), axis=0))
+
+    return cosi(mean_res,mean_answ).item()
 
 def bleu(reference, candidate):
     ref_tokens = reference.lower().split()
