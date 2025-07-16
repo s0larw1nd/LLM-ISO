@@ -28,8 +28,8 @@ def answer_query(query,
 
             if text_splitter is None:
                 #text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=150)
-                #text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
-                text_splitter = CustomTextSplitter(chunk_size=300)
+                text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
+                #text_splitter = CustomTextSplitter(chunk_size=300)
             
             if os.path.isfile(path):
                 loader = Docx2txtLoader(path)
@@ -70,10 +70,10 @@ def answer_query(query,
 
     messages = [
     {"role": "system", "content": 
-     f"""Используя только данный контекст, дай максимально подробный ответ на вопрос о содержании документа. 
-     Крайне важно: ни в коем случае не добавляй ничего не из контекста. По возможности, пиши источники информации (номера и названия пунктов документа).
-     Если в тексте ответа есть ссылка на какой-либо документ, по возможности приведи нужный текст из этого документа.
-     Пиши всегда на русском языке. 
+     f"""You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
+     Ты - эксперт по ответам на вопросы о содержании документов. Тебе даётся контекст и задаётся вопрос.
+     Тебе нужно использовать только данный тебе контекст, чтобы дать максимально подробный ответ на заданный вопрос.
+     Важно: никогда не добавляй ничего не из контекста и пиши источники информации (номера и названия пунктов документа). Пиши всегда на русском языке. 
      КОНТЕКСТ:
      {context_docs}
      КОНЕЦ КОНТЕКСТА"""
@@ -90,7 +90,13 @@ def answer_query(query,
 
     generated_ids = model.generate(
         **model_inputs,
-        max_new_tokens=8192
+        max_new_tokens = 8192,
+        temperature = 0.3,
+        #early_stopping = True,
+        do_sample = True,
+        #num_beams=3
+        top_k=50,
+        top_p=0.95,
     )
 
     generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
@@ -100,4 +106,4 @@ def answer_query(query,
     return response
 
 if __name__ == "__main__":
-    print(answer_query("О чём говорится в пункте 7.1.6?"))
+    print(answer_query("О чём написано в пункте 7.1.6?"))

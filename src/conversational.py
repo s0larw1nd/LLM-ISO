@@ -23,8 +23,7 @@ def format_chat_history(chat_history):
 
 def start_conversation(model_name="./models/Qwen2.5-7B-Instruct-merged",
                        embeddings_name="./models/FRIDA",
-                       persistent_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "chroma_db"),
-                       file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents", "doc.docx")):
+                       persistent_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "chroma_db")):
     
     model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto", local_files_only=True, load_in_4bit=True)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -46,11 +45,11 @@ def start_conversation(model_name="./models/Qwen2.5-7B-Instruct-merged",
 
         messages = [
         {"role": "system", "content": f"""
-        Используя историю диалога, тебе нужно переписать последний вопрос пользователя, который может ссылаться на информацию в истории, 
-        в полностью самостоятельный вопрос, на который можно ответить без знания истории диалога. Важно: не отвечай на вопрос, только переформулируй.
-        Если вопрос не нуждается в подобной переформулировке, верни изначальный вариант. При формулировании старайся внести минимальные изменения, которые позволят добиться цели.
-        Старайся избегать сильного изменения вопроса, если того не требуется.
-        Всегда отвечай в формате одного вопроса на русском языке.
+        You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
+        Ты - эксперт по переписыванию вопросов. Тебе дана история диалога и последний вопрос пользователя. Определи, опирается ли последний вопрос пользователя на информацию из истории диалога.
+        Если да, то перепиши его таким образом, чтобы он включал в себя весь нужный контекст. Иначе - оставь в изначальном состоянии.
+        Важно: не отвечай на вопрос и не добавляй ничего не из истории диалога, только перепиши, сохранив смысл.
+        Отвечай в формате одного вопроса на русском языке. Не делай примечаний.
         ИСТОРИЯ:
         {format_chat_history(chat_history)}
         КОНЕЦ ИСТОРИИ"""
@@ -67,12 +66,20 @@ def start_conversation(model_name="./models/Qwen2.5-7B-Instruct-merged",
 
         new_query = model.generate(
             **model_inputs,
-            max_new_tokens=8192
+            max_new_tokens=8192,
+            temperature = 0.5,
+            #early_stopping = True,
+            do_sample = True,
+            top_k=50,
+            top_p=0.95,
+            #num_beams=3
         )
 
         new_query = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, new_query)]
 
         new_query = tokenizer.batch_decode(new_query, skip_special_tokens=True)[0]
+
+        print(new_query)
 
         relevant_docs = retriever.invoke(new_query)
 
@@ -82,8 +89,8 @@ def start_conversation(model_name="./models/Qwen2.5-7B-Instruct-merged",
         print(answer)
         print()
 
-        chat_history.append(HumanMessage(content=query))
-        chat_history.append(AIMessage(content=answer))
+        chat_history.append({"user": query})
+        chat_history.append({"assistant": answer})
 
 def answer_history(chat_history,
                    model,
@@ -93,13 +100,14 @@ def answer_history(chat_history,
 
     query = chat_history[-1]["user"]
     
+
     messages = [
         {"role": "system", "content": f"""
-        Используя историю диалога, тебе нужно переписать последний вопрос пользователя, который может ссылаться на информацию в истории, 
-        в полностью самостоятельный вопрос, на который можно ответить без знания истории диалога. Важно: не отвечай на вопрос, только переформулируй.
-        Если вопрос не нуждается в подобной переформулировке, верни изначальный вариант. При формулировании старайся внести минимальные изменения, которые позволят добиться цели.
-        Старайся избегать сильного изменения вопроса, если того не требуется.
-        Всегда отвечай в формате одного вопроса на русском языке.
+        You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
+        Ты - эксперт по переписыванию вопросов. Тебе дана история диалога и последний вопрос пользователя. Определи, опирается ли последний вопрос пользователя на информацию из истории диалога.
+        Если да, то перепиши его таким образом, чтобы он включал в себя весь нужный контекст. Иначе - оставь в изначальном состоянии.
+        Важно: не отвечай на вопрос и не добавляй ничего не из истории диалога, только перепиши, сохранив смысл.
+        Отвечай в формате одного вопроса на русском языке.
         ИСТОРИЯ:
         {format_chat_history(chat_history)}
         КОНЕЦ ИСТОРИИ"""
@@ -122,6 +130,8 @@ def answer_history(chat_history,
     new_query = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, new_query)]
 
     new_query = tokenizer.batch_decode(new_query, skip_special_tokens=True)[0]
+
+    print(new_query)
 
     relevant_docs = retriever.invoke(new_query)
 
