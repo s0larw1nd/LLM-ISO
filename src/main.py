@@ -1,69 +1,44 @@
 import os
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import TokenTextSplitter, RecursiveCharacterTextSplitter 
-from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.vectorstores import Chroma
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from scanner import CustomTextSplitter
+from retriever import retrieve
+from db_creation import create_db
+
+import config
 
 def answer_query(query, 
-                 model_name="./models/Qwen2.5-7B-Instruct-merged",
-                 embeddings_name="./models/FRIDA",
-                 persistent_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "chroma_db"),
-                 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents", "doc.docx"),
+                 model_name=config.DEFAULT_MODEL,
+                 embeddings_name=config.DEFAULT_EMBEDDINGS,
+                 persistent_directory = config.DEFAULT_DB_DIR,
+                 doc_path = config.DEFAULT_DOC_FILE,
                  model = None,
                  tokenizer = None,
                  embeddings = None,
-                 retriever = None,
+                 db = None,
                  text_splitter = None,
-                 context_docs = [],
-                 new_db = False):
+                 relevant_docs = [],
+                 new_db = False,
+                 show_docs = False):
     
-    if context_docs == []:
+    if relevant_docs == []:
         if embeddings is None:
             embeddings = HuggingFaceEmbeddings(model_name=embeddings_name)
 
         if not os.path.exists(persistent_directory) or new_db:
             print("Создание БД")
-
-            if text_splitter is None:
-                #text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=150)
-                text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
-                #text_splitter = CustomTextSplitter(chunk_size=300)
-            
-            if os.path.isfile(path):
-                loader = Docx2txtLoader(path)
-                documents = loader.load()
-                docs = text_splitter.split_documents(documents)
-            elif os.path.isdir(path):
-                docx_files = [f for f in os.listdir(path) if f.endswith('.docx')]
-                docs = []
-                for file_name in docx_files:
-                    file_path = os.path.join(path, file_name)
-                    loader = Docx2txtLoader(file_path)
-                    documents = loader.load()
-                    split_docs = text_splitter.split_documents(documents)
-                    docs.extend(split_docs)
-            else:
-                raise ValueError("Некорректный путь")
-
-            db = Chroma.from_documents(docs, embeddings, persist_directory=persistent_directory)
+            db = create_db(doc_path, persistent_directory, embeddings, text_splitter)
         else:
             print("БД уже существует")
+            db = Chroma(persist_directory=persistent_directory, embedding_function=embeddings)            
 
-        if retriever is None:
-            db = Chroma(persist_directory=persistent_directory, embedding_function=embeddings)
+        relevant_docs = retrieve(query, db, ret_trust=0.3, k_doc_orig=50, k_doc_final=15)
 
-            retriever = db.as_retriever(
-                search_type="similarity",
-                search_kwargs={"k": 15},
-            )
+        if show_docs:
+            for i, doc in enumerate(relevant_docs, 1):
+                print(f"Документ {i}:\n{doc}\n")
 
-        relevant_docs = retriever.invoke(query)
-
-        #for i, doc in enumerate(relevant_docs, 1):
-            #print(f"Документ {i}:\n{doc.page_content}\n")
-        context_docs = "\n\n".join([doc.page_content for doc in relevant_docs])
+    context_docs = "\n\n".join([doc for doc in relevant_docs])
 
     if model is None: model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto", local_files_only=True, load_in_4bit=True)
     if tokenizer is None: tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -73,7 +48,7 @@ def answer_query(query,
      f"""You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
      Ты - эксперт по ответам на вопросы о содержании документов. Тебе даётся контекст и задаётся вопрос.
      Тебе нужно использовать только данный тебе контекст, чтобы дать максимально подробный ответ на заданный вопрос.
-     Важно: никогда не добавляй ничего не из контекста и пиши источники информации (номера и названия пунктов документа). Пиши всегда на русском языке. 
+     Важно: никогда не добавляй ничего не из контекста и пиши источники информации (номера и названия пунктов документа). Пиши всегда на русском языке. Не делай ссылки на контекст.
      КОНТЕКСТ:
      {context_docs}
      КОНЕЦ КОНТЕКСТА"""
@@ -90,11 +65,9 @@ def answer_query(query,
 
     generated_ids = model.generate(
         **model_inputs,
-        max_new_tokens = 8192,
-        temperature = 0.3,
-        #early_stopping = True,
-        do_sample = True,
-        #num_beams=3
+        max_new_tokens=8192,
+        temperature=0.4,
+        do_sample=True,
         top_k=50,
         top_p=0.95,
     )
@@ -106,4 +79,4 @@ def answer_query(query,
     return response
 
 if __name__ == "__main__":
-    print(answer_query("О чём написано в пункте 7.1.6?"))
+    print(answer_query("Опиши планирование и управление деятельностью", show_docs=True))

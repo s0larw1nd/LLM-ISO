@@ -9,9 +9,11 @@ import os
 
 from typing import Any
 
-model_name = "./models/Qwen2.5-7B-Instruct-merged"
-embeddings_name="./models/FRIDA"
-persistent_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "chroma_db")
+import config
+
+model_name = config.DEFAULT_MODEL
+embeddings_name = config.DEFAULT_EMBEDDINGS
+persistent_directory = config.DEFAULT_DB_DIR
 
 model = AutoModelForCausalLM.from_pretrained(
     model_name, 
@@ -21,10 +23,10 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 embeddings = HuggingFaceEmbeddings(model_name=embeddings_name)
-retriever = Chroma(
+db = Chroma(
     persist_directory=persistent_directory, 
     embedding_function=embeddings
-).as_retriever(search_kwargs={"k": 15})
+    )
 
 app = FastAPI()
 
@@ -34,6 +36,6 @@ class ChatRequest(BaseModel):
 @app.post("/answer")
 async def answer(request: ChatRequest):
     print(request.history)
-    response = answer_history(request.history, model=model, tokenizer=tokenizer, retriever=retriever, embeddings=embeddings)
+    response = answer_history(request.history, model=model, tokenizer=tokenizer, db=db, embeddings=embeddings)
 
     return {"response": response}
