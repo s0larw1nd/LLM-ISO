@@ -17,9 +17,9 @@ def create_db(doc_path,
               text_splitter=None):
     
     if text_splitter is None:
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=150)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=200)
         #text_splitter = TokenTextSplitter(chunk_size=512, chunk_overlap=256)
-        #text_splitter = CustomTextSplitter(chunk_size=300)
+        #text_splitter = CustomTextSplitter(chunk_size=700)
     
     if os.path.isfile(doc_path):
         loader = Docx2txtLoader(doc_path)
@@ -38,3 +38,9 @@ def create_db(doc_path,
         raise ValueError("Некорректный путь")
 
     return Chroma.from_documents(docs, embeddings, persist_directory=persistent_directory)
+
+if __name__ == "__main__":
+    import config
+    from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+
+    create_db(config.DEFAULT_DOC_FILE, config.DEFAULT_DB_DIR, HuggingFaceEmbeddings(model_name=config.DEFAULT_EMBEDDINGS))

@@ -5,7 +5,6 @@ from conversational import answer_history
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-import os
 
 from typing import Any
 
@@ -35,7 +34,6 @@ class ChatRequest(BaseModel):
 
 @app.post("/answer")
 async def answer(request: ChatRequest):
-    print(request.history)
     response = answer_history(request.history, model=model, tokenizer=tokenizer, db=db, embeddings=embeddings)
 
     return {"response": response}

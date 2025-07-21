@@ -2,7 +2,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import TokenTextSplitter, RecursiveCharacterTextSplitter 
 from scanner import CustomTextSplitter
-import os
 
 from main import answer_query
 from metrics import cosine, bleu, rouge

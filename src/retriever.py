@@ -6,7 +6,9 @@ def retrieve(query,
              ret_trust=0.3, 
              k_doc_orig=70, 
              k_doc_final=20, 
-             nlp=None):
+             nlp=None,
+             k1=1.5,
+             b=0.75):
     
     retriever = db.as_retriever(
         search_type="similarity",
@@ -15,7 +17,7 @@ def retrieve(query,
 
     docs_orig = [doc.page_content for doc in retriever.invoke(query)]
 
-    scores = BM25(query, docs_orig[int(k_doc_final * ret_trust):], nlp=nlp)
+    scores = BM25(query, docs_orig[int(k_doc_final * ret_trust):], nlp=nlp, k1=k1, b=b)
 
     docs_bm25 = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 

@@ -9,7 +9,7 @@ def lemmatize_spacy(text, nlp):
 def BM25(query, documents, k1=1.5, b=0.75, nlp = None):
     if nlp is None: nlp = spacy.load("ru_core_news_sm")
 
-    q_terms = lemmatize_spacy(query,nlp).strip().lower().split()
+    q_terms = lemmatize_spacy(query,nlp).strip().strip("?").lower().split()
     docs = [lemmatize_spacy(doc,nlp).strip().lower().split() for doc in documents]
     avgdl = sum(len(doc) for doc in docs) / len(docs)
     

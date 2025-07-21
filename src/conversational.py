@@ -1,4 +1,3 @@
-import os
 from main import answer_query
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_community.vectorstores import Chroma
@@ -21,44 +20,50 @@ def answer_history(chat_history,
                    embeddings):
 
     query = chat_history[-1]["user"]
-    
-    messages = [
-        {"role": "system", "content": f"""
-        You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
-        Ты - эксперт по переписыванию вопросов. Тебе дана история диалога и последний вопрос пользователя. Определи, опирается ли последний вопрос пользователя на информацию из истории диалога.
-        Если да, то перепиши его таким образом, чтобы он включал в себя весь нужный контекст. Иначе - оставь в изначальном состоянии.
-        Важно: не отвечай на вопрос и не добавляй ничего не из истории диалога, только перепиши, сохранив смысл.
-        Отвечай в формате одного вопроса на русском языке.
-        ИСТОРИЯ:
-        {format_chat_history(chat_history)}
-        КОНЕЦ ИСТОРИИ"""
-        },
-        {"role": "user", "content": "ВОПРОС: " + query}
-    ]
-    
-    text = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
+
+    if len(chat_history) > 1:
+        messages = [
+            {"role": "system", "content": f"""
+            You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
+            Ты - эксперт по переписыванию вопросов. Тебе дана история диалога и последний вопрос пользователя. Определи, опирается ли последний вопрос пользователя на информацию из истории диалога.
+            Если да, то перепиши его таким образом, чтобы он включал в себя весь нужный контекст. Иначе - оставь в изначальном состоянии.
+            Важно: не отвечай на вопрос и не добавляй ничего не из истории диалога, только перепиши, сохранив смысл.
+            Отвечай в формате одного вопроса на русском языке.
+            ИСТОРИЯ:
+            {format_chat_history(chat_history)}
+            КОНЕЦ ИСТОРИИ"""
+            },
+            {"role": "user", "content": "ВОПРОС: " + query}
+        ]
+        
+        text = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        model_inputs = tokenizer([text], return_tensors="pt",truncation=True,max_length=32768).to(model.device)
+
+        new_query = model.generate(
+            **model_inputs,
+            max_new_tokens=8192,
+            temperature=0.5,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
         )
-    model_inputs = tokenizer([text], return_tensors="pt",truncation=True,max_length=32768).to(model.device)
 
-    new_query = model.generate(
-        **model_inputs,
-        max_new_tokens=8192,
-        temperature=0.5,
-        do_sample=True,
-        top_k=50,
-        top_p=0.95,
-    )
+        new_query = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, new_query)]
 
-    new_query = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, new_query)]
+        new_query = tokenizer.batch_decode(new_query, skip_special_tokens=True)[0]
 
-    new_query = tokenizer.batch_decode(new_query, skip_special_tokens=True)[0]
+        relevant_docs = retrieve(new_query, db)
 
-    relevant_docs = retrieve(new_query, db)
+        answer = answer_query(query=new_query, model=model, tokenizer=tokenizer, relevant_docs=relevant_docs, embeddings=embeddings)
 
-    answer = answer_query(query=new_query, model=model, tokenizer=tokenizer, relevant_docs=relevant_docs, embeddings=embeddings)
+    else:
+        relevant_docs = retrieve(query, db)
+        
+        answer = answer_query(query=query, model=model, tokenizer=tokenizer, relevant_docs=relevant_docs, embeddings=embeddings)
 
     return answer
 

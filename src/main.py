@@ -32,7 +32,7 @@ def answer_query(query,
             print("БД уже существует")
             db = Chroma(persist_directory=persistent_directory, embedding_function=embeddings)            
 
-        relevant_docs = retrieve(query, db, ret_trust=0.3, k_doc_orig=50, k_doc_final=15)
+        relevant_docs = retrieve(query, db, ret_trust=0.4, k_doc_orig=40, k_doc_final=15)
 
         if show_docs:
             for i, doc in enumerate(relevant_docs, 1):
@@ -79,4 +79,4 @@ def answer_query(query,
     return response
 
 if __name__ == "__main__":
-    print(answer_query("Опиши планирование и управление деятельностью", show_docs=True))
+    print(answer_query("Опиши менеджмент человеческих ресурсов проекта", show_docs=True))
