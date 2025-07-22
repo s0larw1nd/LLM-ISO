@@ -79,4 +79,4 @@ def answer_query(query,
     return response
 
 if __name__ == "__main__":
-    print(answer_query("Опиши менеджмент человеческих ресурсов проекта", show_docs=True))
+    print(answer_query("Чем отличаются анализ, верификация и валидация проектирования и разработки?", show_docs=True))

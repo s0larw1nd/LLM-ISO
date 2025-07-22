@@ -3,14 +3,14 @@ import spacy
 
 def lemmatize_spacy(text, nlp):
     doc = nlp(text)
-    lemmas = [token.lemma_ for token in doc]
-    return ' '.join(lemmas)
+    lemmas = [token.lemma_ for token in doc if not(token.is_punct)]
+    return lemmas
 
 def BM25(query, documents, k1=1.5, b=0.75, nlp = None):
     if nlp is None: nlp = spacy.load("ru_core_news_sm")
 
-    q_terms = lemmatize_spacy(query,nlp).strip().strip("?").lower().split()
-    docs = [lemmatize_spacy(doc,nlp).strip().lower().split() for doc in documents]
+    q_terms = lemmatize_spacy(query.strip(), nlp)
+    docs = [lemmatize_spacy(doc.strip(), nlp) for doc in documents]
     avgdl = sum(len(doc) for doc in docs) / len(docs)
     
     df = {}
